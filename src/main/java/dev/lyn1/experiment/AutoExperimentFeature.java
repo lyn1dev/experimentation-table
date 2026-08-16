@@ -42,7 +42,7 @@ public final class AutoExperimentFeature {
         if (!enabled) {
             return;
         }
-        if (!(client.gui.screen() instanceof ContainerScreen screen)) {
+        if (!(client.screen instanceof ContainerScreen screen)) {
             reset();
             return;
         }
