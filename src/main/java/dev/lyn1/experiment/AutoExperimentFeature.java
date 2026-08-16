@@ -1,10 +1,14 @@
 package dev.lyn1.experiment;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.ChestMenu;
@@ -29,6 +33,13 @@ public final class AutoExperimentFeature {
 
     private static final int BASE_HUMAN_DELAY_MS = 200;
 
+    @FunctionalInterface
+    private interface ScreenAccessor {
+        Screen getScreen(Minecraft client);
+    }
+
+    private static final ScreenAccessor SCREEN_ACCESSOR = initScreenAccessor();
+
     private AutoExperimentFeature() {
     }
 
@@ -39,10 +50,11 @@ public final class AutoExperimentFeature {
             reset();
         }
         Minecraft client = Minecraft.getInstance();
-        if (!enabled) {
+        if (!enabled || client == null) {
             return;
         }
-        if (!(client.screen instanceof ContainerScreen screen)) {
+        Screen currentScreen = SCREEN_ACCESSOR.getScreen(client);
+        if (!(currentScreen instanceof ContainerScreen screen)) {
             reset();
             return;
         }
@@ -171,6 +183,69 @@ public final class AutoExperimentFeature {
         }
         client.gameMode.handleContainerInput(containerId, slot, 0, ContainerInput.PICKUP, client.player);
         return true;
+    }
+
+    private static ScreenAccessor initScreenAccessor() {
+        // Option 1: Gui.screen() method (Minecraft 26.2+)
+        try {
+            Method method = Gui.class.getMethod("screen");
+            method.setAccessible(true);
+            return client -> {
+                try {
+                    return client.gui != null ? (Screen) method.invoke(client.gui) : null;
+                } catch (Throwable t) {
+                    return null;
+                }
+            };
+        } catch (Throwable ignored) {
+        }
+
+        // Option 2: Gui.screen field (Minecraft 26.2+ fallback)
+        try {
+            Field field = Gui.class.getDeclaredField("screen");
+            field.setAccessible(true);
+            return client -> {
+                try {
+                    return client.gui != null ? (Screen) field.get(client.gui) : null;
+                } catch (Throwable t) {
+                    return null;
+                }
+            };
+        } catch (Throwable ignored) {
+        }
+
+        // Option 3: Minecraft.screen field (Minecraft 26.1.2)
+        try {
+            Field field = Minecraft.class.getDeclaredField("screen");
+            field.setAccessible(true);
+            return client -> {
+                try {
+                    return (Screen) field.get(client);
+                } catch (Throwable t) {
+                    return null;
+                }
+            };
+        } catch (Throwable ignored) {
+        }
+
+        // Option 4: Scan Minecraft fields for any Screen type instance (Minecraft 26.1.2 fallback)
+        try {
+            for (Field field : Minecraft.class.getDeclaredFields()) {
+                if (Screen.class.isAssignableFrom(field.getType())) {
+                    field.setAccessible(true);
+                    return client -> {
+                        try {
+                            return (Screen) field.get(client);
+                        } catch (Throwable t) {
+                            return null;
+                        }
+                    };
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+
+        return client -> null;
     }
 
     private static List<ExperimentSolver.Cell> snapshot(ChestMenu menu) {
