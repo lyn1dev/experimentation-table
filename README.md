@@ -1,4 +1,4 @@
-# Experimentation Table
+# Experimentation Table - (Works 26.1.2 and 26.2)
 
 ![Version](https://img.shields.io/badge/version-0.1.0-2ea44f)
 ![Minecraft](https://img.shields.io/badge/Minecraft-26.2-e34c26)
