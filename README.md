@@ -97,8 +97,21 @@ The built jar is at `build/libs/lyn1-experiment-0.1.0.jar`.
      replay: click the mapped slots in order.
    - **Superpairs**: revealed items (not glass / clock / glowstone / black dye,
      with a name) are paired by item+name; both slots of each pair are clicked.
-4. Clicks are spaced by the configured delay and sent via
+4. Clicks are spaced by dynamic humanized delays and sent via
    `gameMode.handleContainerInput(..., ContainerInput.PICKUP, ...)`.
+
+## Human-like Timing & Click Randomization
+
+The mod features a behavioral simulation engine to avoid metronome-like inputs:
+
+- **Packet Randomization**: Clicks use standard `ContainerInput.PICKUP` packets with a randomized distribution of **96% Left Click** (`button = 0`) and **4% Right Click** (`button = 1`).
+- **Glowstone $\rightarrow$ Clock Reaction Delay**: When the game transitions from the reveal phase (`glowstone`) to the input phase (`clock`), the mod simulates human perception time using a Gaussian curve ($\mu = 330\text{ ms}, \sigma = 40\text{ ms}$, clamped to $[250, 480]\text{ ms}$).
+- **Spatial Distance Scaling (Fitts's Law)**: Calculates the 2D Euclidean distance between successive slots on the $9 \times 6$ inventory grid, adding $16\text{–}24\text{ ms}$ per grid unit so distant slots take naturally longer to reach than adjacent ones.
+- **Gaussian Jitter**: Every click interval incorporates standard normal variance ($\mathcal{N}(0, 25^2)\text{ ms}$, clamped to $[-45, +65]\text{ ms}$) on top of the configured base delay.
+- **Contextual Hesitation**:
+  - **Superpairs**: Introduces a $160\text{–}290\text{ ms}$ visual search pause when locating a new matching pair, followed by rapid pair confirmation.
+  - **Sequence Recall**: Adds a 10% chance of a micro-hesitation ($45\text{–}95\text{ ms}$) during extended sequence playback.
+- **Screen Open Orientation**: Pauses $300\text{–}500\text{ ms}$ upon opening any table GUI before initiating inputs.
 
 ## Project structure
 
