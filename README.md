@@ -24,7 +24,7 @@ in-game via `/experiment` commands.
 - **No GUI** — the feature is toggled and configured entirely through
   `/experiment` commands; settings persist to `config/lyn1-experiment.json`.
 - Game identification is purely client-side: the open screen title selects the
-  solver, and all clicks use the **CLONE (Pick Block)** container interaction.
+  solver, and clicks use standard **PICKUP (Left/Right Click)** container interactions.
 
 ## Commands
 
@@ -98,7 +98,7 @@ The built jar is at `build/libs/lyn1-experiment-0.1.0.jar`.
    - **Superpairs**: revealed items (not glass / clock / glowstone / black dye,
      with a name) are paired by item+name; both slots of each pair are clicked.
 4. Clicks are spaced by the configured delay and sent via
-   `gameMode.handleContainerInput(..., ContainerInput.CLONE, ...)`.
+   `gameMode.handleContainerInput(..., ContainerInput.PICKUP, ...)`.
 
 ## Project structure
 

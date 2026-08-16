@@ -3,6 +3,7 @@ package dev.lyn1.experiment;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -15,7 +16,7 @@ import net.minecraft.world.item.ItemStack;
  * Tick-driven Auto Experiment handler, ported from the Lyn1-client Auto
  * Enchanting module. Solves Experimentation Table games (Chronomatron,
  * Ultrasequencer, Superpairs) by reading the open container and clicking the
- * required slots via the CLONE (Pick Block) interaction.
+ * required slots via the PICKUP interaction (Left/Right click).
  */
 public final class AutoExperimentFeature {
     private static final ExperimentSolver SOLVER = new ExperimentSolver();
@@ -77,7 +78,8 @@ public final class AutoExperimentFeature {
         if (client.player == null || client.gameMode == null) {
             return false;
         }
-        client.gameMode.handleContainerInput(containerId, slot, 0, ContainerInput.CLONE, client.player);
+        int button = ThreadLocalRandom.current().nextInt(100) < 4 ? 1 : 0;
+        client.gameMode.handleContainerInput(containerId, slot, button, ContainerInput.PICKUP, client.player);
         return true;
     }
 
