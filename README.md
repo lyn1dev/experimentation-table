@@ -20,7 +20,7 @@ in-game via `/experiment` commands.
 - **Superpairs** — tracks revealed pairs (by item + name) and clicks both slots of
   each match — can be disabled with `/experiment superpairs off` while
   Chronomatron / Ultrasequencer keep running.
-- **Click delay** — configurable inter-click delay to stay within server limits.
+- **Human-like Timing** — automated Gaussian intervals, 2D cursor distance scaling, and reaction delays.
 - **No GUI** — the feature is toggled and configured entirely through
   `/experiment` commands; settings persist to `config/lyn1-experiment.json`.
 - Game identification is purely client-side: the open screen title selects the
@@ -33,12 +33,11 @@ in-game via `/experiment` commands.
 | `/experiment` | Show current status and settings |
 | `/experiment on` / `off` | Enable / disable the solver |
 | `/experiment superpairs on` / `off` | Enable / disable Superpairs auto-matching |
-| `/experiment delay <ms>` | Set click delay (`0`–`1000`, default `200`) |
 
 Confirmation example (green in chat):
 
 ```
-[Lyn1-Experiment] Click delay set to 250 ms        (in-game, shown in green)
+[Lyn1-Experiment] Auto Experiment enabled        (in-game, shown in green)
 ```
 
 ## Configuration
@@ -47,17 +46,15 @@ Settings are saved to `config/lyn1-experiment.json`:
 
 ```json
 {
-  "delay": 200,
   "enabled": true,
   "superpairs": true
 }
 ```
 
-| Field | Type | Range | Default | Description |
-|---|---|---|---|---|
-| `delay` | integer | 0–1000 | 200 | Click delay in milliseconds |
-| `enabled` | boolean | — | true | Solver on/off |
-| `superpairs` | boolean | — | true | Superpairs auto-matching on/off |
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | boolean | true | Solver on/off |
+| `superpairs` | boolean | true | Superpairs auto-matching on/off |
 
 ## Usage
 
@@ -68,7 +65,6 @@ Settings are saved to `config/lyn1-experiment.json`:
    your island (or use the Community Center one).
 3. Open the table — the mod starts solving automatically (it is enabled by
    default; disable with `/experiment off` if needed).
-4. Tune the click delay with `/experiment delay 150` if the server lags.
 
 ## Building from source
 

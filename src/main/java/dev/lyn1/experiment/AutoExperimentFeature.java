@@ -27,6 +27,8 @@ public final class AutoExperimentFeature {
     private static int consecutivePairClicks = 0;
     private static boolean wasEnabled = true;
 
+    private static final int BASE_HUMAN_DELAY_MS = 200;
+
     private AutoExperimentFeature() {
     }
 
@@ -80,11 +82,11 @@ public final class AutoExperimentFeature {
             return;
         }
 
-        OptionalInt click = SOLVER.nextClick(cells, now, 0L, 0L);
+        OptionalInt click = SOLVER.nextClick(cells);
         if (click.isPresent() && clickContainerSlot(menu.containerId, click.getAsInt())) {
             int slot = click.getAsInt();
             boolean isNewPair = (mode == ExperimentSolver.Mode.SUPERPAIRS && (consecutivePairClicks % 2 == 0));
-            long nextDelay = generateInterClickDelay(lastSlotClicked, slot, ExperimentConfig.delayMs(), isNewPair);
+            long nextDelay = generateInterClickDelay(lastSlotClicked, slot, isNewPair);
             nextAllowedClickMillis = now + nextDelay;
             lastSlotClicked = slot;
             consecutivePairClicks++;
@@ -126,12 +128,12 @@ public final class AutoExperimentFeature {
 
     /**
      * Computes a natural human inter-click delay incorporating:
-     * 1. Base user-configured delay
+     * 1. Base human clicking speed (~200ms)
      * 2. Physical cursor travel time based on 2D slot distance
      * 3. Gaussian variance (jitter)
      * 4. Contextual hesitation (finding new pairs or recalling note sequences)
      */
-    private static long generateInterClickDelay(int fromSlot, int toSlot, long baseDelayMs, boolean isNewPair) {
+    private static long generateInterClickDelay(int fromSlot, int toSlot, boolean isNewPair) {
         double dist = slotDistance(fromSlot, toSlot);
         double speed = ThreadLocalRandom.current().nextDouble(16.0, 24.0); // ms per grid unit
         long travelTime = Math.round(dist * speed);
@@ -149,7 +151,7 @@ public final class AutoExperimentFeature {
             hesitation = ThreadLocalRandom.current().nextLong(45, 95);
         }
 
-        long total = baseDelayMs + travelTime + jitter + hesitation;
+        long total = BASE_HUMAN_DELAY_MS + travelTime + jitter + hesitation;
         return Math.max(120, total);
     }
 

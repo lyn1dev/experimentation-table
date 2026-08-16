@@ -1,7 +1,6 @@
 package dev.lyn1.experiment;
 
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
@@ -28,7 +27,6 @@ public final class Lyn1ExperimentMod implements ClientModInitializer {
             .executes(context -> {
                 context.getSource().sendFeedback(Component.literal(
                     "[Lyn1-Experiment] Status: " + (ExperimentConfig.enabled() ? "ON" : "OFF")
-                        + " | Click delay: " + ExperimentConfig.delayMs() + " ms"
                         + " | Superpairs: " + (ExperimentConfig.superpairs() ? "ON" : "OFF")
                 ).withStyle(ChatFormatting.AQUA));
                 return 1;
@@ -41,18 +39,7 @@ public final class Lyn1ExperimentMod implements ClientModInitializer {
                 .then(ClientCommands.literal("on")
                     .executes(context -> setSuperpairsEnabled(context.getSource(), true)))
                 .then(ClientCommands.literal("off")
-                    .executes(context -> setSuperpairsEnabled(context.getSource(), false))))
-            .then(ClientCommands.literal("delay")
-                .then(ClientCommands.argument("ms",
-                        IntegerArgumentType.integer(ExperimentConfig.MIN_DELAY_MS, ExperimentConfig.MAX_DELAY_MS))
-                    .executes(context -> {
-                        int ms = IntegerArgumentType.getInteger(context, "ms");
-                        ExperimentConfig.setDelayMs(ms);
-                        context.getSource().sendFeedback(Component.literal(
-                            "[Lyn1-Experiment] Click delay set to " + ms + " ms"
-                        ).withStyle(ChatFormatting.GREEN));
-                        return 1;
-                    }))));
+                    .executes(context -> setSuperpairsEnabled(context.getSource(), false)))));
     }
 
     private static int setEnabled(FabricClientCommandSource source, boolean value) {

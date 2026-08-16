@@ -42,8 +42,7 @@ final class ExperimentSolver {
         return mode;
     }
 
-    OptionalInt nextClick(List<Cell> cells, long nowMillis, long lastClickMillis, long delayMillis) {
-        if (nowMillis - lastClickMillis < delayMillis) return OptionalInt.empty();
+    OptionalInt nextClick(List<Cell> cells) {
         return switch (mode) {
             case CHRONOMATRON -> solveChronomatron(cells);
             case ULTRASEQUENCER -> solveUltrasequencer(cells);
