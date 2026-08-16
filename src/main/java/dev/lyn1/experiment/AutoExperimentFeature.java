@@ -2,19 +2,30 @@ package dev.lyn1.experiment;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
+import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.Connection;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 
 /**
  * Tick-driven Auto Experiment handler, ported from the Lyn1-client Auto
@@ -83,30 +94,43 @@ public final class AutoExperimentFeature {
         ChestMenu menu = screen.getMenu();
         List<ExperimentSolver.Cell> cells = snapshot(menu);
 
-        // Detect control item (slot 49) transition from glowstone to clock (round start reaction)
+        // Detect control item (slot 49) transition from preview item to clock (round start reaction)
         String currentControl = getControlItem(cells);
-        if ("minecraft:glowstone".equals(lastControlItem) && "minecraft:clock".equals(currentControl)) {
+        boolean wasNotClock = !lastControlItem.isEmpty() && !lastControlItem.contains("clock");
+        boolean isNowClock = currentControl.contains("clock");
+        if (wasNotClock && isNowClock) {
             nextAllowedClickMillis = Math.max(nextAllowedClickMillis, now + generateReactionDelay());
         }
         lastControlItem = currentControl;
 
-        if (now < nextAllowedClickMillis) {
-            return;
-        }
-
+        // Process solver every tick to ensure continuous real-time observation of note sequences
         OptionalInt click = SOLVER.nextClick(cells);
-        if (click.isPresent() && clickContainerSlot(menu.containerId, click.getAsInt())) {
+
+        // Click execution is gated by humanized timing & ping compensation
+        if (click.isPresent()) {
+            if (now < nextAllowedClickMillis) {
+                return;
+            }
             int slot = click.getAsInt();
-            boolean isNewPair = (mode == ExperimentSolver.Mode.SUPERPAIRS && (consecutivePairClicks % 2 == 0));
-            long nextDelay = generateInterClickDelay(lastSlotClicked, slot, isNewPair);
-            nextAllowedClickMillis = now + nextDelay;
-            lastSlotClicked = slot;
-            consecutivePairClicks++;
+            if (clickContainerSlot(menu.containerId, slot)) {
+                SOLVER.onSlotClicked(slot);
+                boolean isNewPair = (mode == ExperimentSolver.Mode.SUPERPAIRS && (consecutivePairClicks % 2 == 0));
+                long nextDelay = generateInterClickDelay(lastSlotClicked, slot, isNewPair);
+                nextAllowedClickMillis = now + nextDelay;
+                lastSlotClicked = slot;
+                consecutivePairClicks++;
+            }
         }
     }
 
+    private static volatile int measuredPingMs = -1;
+    private static volatile long lastPingSampleTime = 0;
+
     public static void onWorldChanged() {
+        measuredPingMs = -1;
+        lastPingSampleTime = 0;
         reset();
+        refreshPingAsync(true);
     }
 
     private static void reset() {
@@ -119,13 +143,83 @@ public final class AutoExperimentFeature {
     }
 
     /**
+     * Retrieves the real client-to-server latency in milliseconds.
+     * Uses live socket RTT measurements to bypass Hypixel's fake tablist ping (which reports 1 ms).
+     * Returns -1 if not connected to a server or in singleplayer.
+     */
+    public static int getClientPing() {
+        refreshPingAsync(false);
+        if (measuredPingMs >= 0) {
+            return measuredPingMs;
+        }
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.player == null || client.getConnection() == null) {
+            return -1;
+        }
+        PlayerInfo info = client.getConnection().getPlayerInfo(client.player.getUUID());
+        if (info != null && info.getLatency() > 1) {
+            return info.getLatency();
+        }
+        return -1;
+    }
+
+    public static void refreshPingAsync(boolean force) {
+        long now = System.currentTimeMillis();
+        if (!force && now - lastPingSampleTime < 3_000L) {
+            return;
+        }
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null) {
+            return;
+        }
+        Connection connection = client.getConnection().getConnection();
+        if (connection == null || connection.isMemoryConnection()) {
+            measuredPingMs = 0;
+            lastPingSampleTime = now;
+            return;
+        }
+        SocketAddress address = connection.getRemoteAddress();
+        if (!(address instanceof InetSocketAddress inetAddr)) {
+            return;
+        }
+
+        lastPingSampleTime = now;
+        CompletableFuture.runAsync(() -> {
+            try {
+                long start = System.nanoTime();
+                try (Socket socket = new Socket()) {
+                    InetAddress host = inetAddr.getAddress();
+                    SocketAddress target = host != null
+                        ? new InetSocketAddress(host, inetAddr.getPort())
+                        : new InetSocketAddress(inetAddr.getHostString(), inetAddr.getPort());
+                    socket.connect(target, 1500);
+                }
+                long rtt = (System.nanoTime() - start) / 1_000_000L;
+                measuredPingMs = (int) Math.max(1, rtt);
+            } catch (Throwable ignored) {
+            }
+        });
+    }
+
+    /**
+     * Calculates the effective ping buffer in milliseconds:
+     * max(configuredBaselinePing, detectedPing)
+     */
+    private static long getPingDelayBuffer() {
+        int detected = getClientPing();
+        int base = ExperimentConfig.basePingMs();
+        return Math.max(base, Math.max(0, detected));
+    }
+
+    /**
      * Simulates human visual reaction time when the round changes from
-     * memorization (glowstone) to input phase (clock).
+     * memorization (glowstone) to input phase (clock), adjusted for network latency.
      */
     private static long generateReactionDelay() {
         double gaussian = ThreadLocalRandom.current().nextGaussian();
         long delay = Math.round(330 + gaussian * 40); // Mean: 330ms, StdDev: 40ms
-        return Math.clamp(delay, 250, 480);
+        long reaction = Math.clamp(delay, 250, 480);
+        return reaction + (getPingDelayBuffer() / 2);
     }
 
     /**
@@ -144,6 +238,7 @@ public final class AutoExperimentFeature {
      * 2. Physical cursor travel time based on 2D slot distance
      * 3. Gaussian variance (jitter)
      * 4. Contextual hesitation (finding new pairs or recalling note sequences)
+     * 5. Ping compensation to prevent clicking faster than server packet processing
      */
     private static long generateInterClickDelay(int fromSlot, int toSlot, boolean isNewPair) {
         double dist = slotDistance(fromSlot, toSlot);
@@ -163,7 +258,8 @@ public final class AutoExperimentFeature {
             hesitation = ThreadLocalRandom.current().nextLong(45, 95);
         }
 
-        long total = BASE_HUMAN_DELAY_MS + travelTime + jitter + hesitation;
+        long pingCompensation = getPingDelayBuffer();
+        long total = BASE_HUMAN_DELAY_MS + travelTime + jitter + hesitation + pingCompensation;
         return Math.max(120, total);
     }
 
@@ -248,6 +344,35 @@ public final class AutoExperimentFeature {
         return client -> null;
     }
 
+    private static boolean isItemFoil(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        if (stack.hasFoil() || stack.isEnchanted()) {
+            return true;
+        }
+        Boolean glint = stack.get(DataComponents.ENCHANTMENT_GLINT_OVERRIDE);
+        if (Boolean.TRUE.equals(glint)) {
+            return true;
+        }
+        ItemEnchantments enchs = stack.get(DataComponents.ENCHANTMENTS);
+        if (enchs != null && !enchs.isEmpty()) {
+            return true;
+        }
+        ItemEnchantments stored = stack.get(DataComponents.STORED_ENCHANTMENTS);
+        if (stored != null && !stored.isEmpty()) {
+            return true;
+        }
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        if (customData != null && !customData.isEmpty()) {
+            CompoundTag tag = customData.copyTag();
+            if (tag.contains("ench") || tag.contains("Enchantments") || tag.contains("glint") || tag.contains("glowing") || tag.contains("enchanted")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static List<ExperimentSolver.Cell> snapshot(ChestMenu menu) {
         ArrayList<ExperimentSolver.Cell> cells = new ArrayList<>(menu.slots.size());
         for (Slot slot : menu.slots) {
@@ -257,7 +382,7 @@ public final class AutoExperimentFeature {
                 slot.index,
                 empty ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),
                 empty ? 0 : stack.getCount(),
-                !empty && stack.hasFoil(),
+                !empty && isItemFoil(stack),
                 empty ? "" : stack.getHoverName().getString(),
                 empty
             ));

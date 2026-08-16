@@ -23,11 +23,13 @@ final class ExperimentSolver {
 
     private Mode mode = Mode.NONE;
     private final List<Integer> chronomatron = new ArrayList<>();
-    private boolean chronomatronRevealLatched;
-    private int chronomatronClickIndex;
+    private final List<Integer> chronomatronPreviewSequence = new ArrayList<>();
+    private int lastFoilSlot = -1;
+    private boolean wasClock = false;
+    private int chronomatronClickIndex = 0;
     private final Map<Integer, Integer> ultrasequencer = new HashMap<>();
-    private int ultrasequencerClickIndex;
-    private boolean ultrasequencerReady;
+    private int ultrasequencerClickIndex = 0;
+    private boolean ultrasequencerReady = false;
     private final Map<String, Integer> seenPairs = new HashMap<>();
     private final Queue<Integer> pairClicks = new ArrayDeque<>();
     private final Set<Integer> queuedPairSlots = new HashSet<>();
@@ -51,6 +53,23 @@ final class ExperimentSolver {
         };
     }
 
+    void onSlotClicked(int slot) {
+        switch (mode) {
+            case CHRONOMATRON -> {
+                if (chronomatronClickIndex < chronomatron.size()) {
+                    chronomatronClickIndex++;
+                }
+            }
+            case ULTRASEQUENCER -> {
+                ultrasequencerClickIndex++;
+            }
+            case SUPERPAIRS -> {
+                pairClicks.poll();
+            }
+            case NONE -> {}
+        }
+    }
+
     int rememberedCount() {
         return switch (mode) {
             case CHRONOMATRON -> chronomatron.size();
@@ -63,20 +82,53 @@ final class ExperimentSolver {
     private OptionalInt solveChronomatron(List<Cell> cells) {
         Cell control = cell(cells, 49);
         if (control == null) return OptionalInt.empty();
-        if (control.itemId().equals("minecraft:glowstone")) {
-            chronomatronRevealLatched = false;
+
+        Cell foil = cells.stream()
+            .filter(cell -> cell.slot() >= 10 && cell.slot() <= 43 && cell.foil())
+            .findFirst()
+            .orElse(null);
+
+        boolean isClock = control.itemId().contains("clock");
+
+        // Transition: Clock -> Glowstone (New round demonstration preview starting)
+        if (wasClock && !isClock) {
+            chronomatronPreviewSequence.clear();
+            lastFoilSlot = foil != null ? foil.slot() : -1;
             chronomatronClickIndex = 0;
+        }
+
+        // Preview / demonstration phase (non-clock, e.g. glowstone)
+        if (!isClock) {
+            wasClock = false;
+            chronomatronClickIndex = 0;
+            if (foil != null) {
+                if (foil.slot() != lastFoilSlot) {
+                    lastFoilSlot = foil.slot();
+                    chronomatronPreviewSequence.add(foil.slot());
+                }
+            } else {
+                lastFoilSlot = -1;
+            }
             return OptionalInt.empty();
         }
-        if (!control.itemId().equals("minecraft:clock")) return OptionalInt.empty();
-        Cell foil = cells.stream().filter(cell -> cell.slot() >= 10 && cell.slot() <= 43 && cell.foil()).findFirst().orElse(null);
-        if (!chronomatronRevealLatched && foil != null) {
-            chronomatron.add(foil.slot());
-            chronomatronRevealLatched = true;
+
+        // Transition: Glowstone -> Clock (Preview ended, player input starting)
+        if (!wasClock && isClock) {
+            wasClock = true;
+            if (foil != null && foil.slot() != lastFoilSlot) {
+                lastFoilSlot = foil.slot();
+                chronomatronPreviewSequence.add(foil.slot());
+            }
+            if (!chronomatronPreviewSequence.isEmpty()) {
+                chronomatron.clear();
+                chronomatron.addAll(chronomatronPreviewSequence);
+            }
             chronomatronClickIndex = 0;
+            lastFoilSlot = foil != null ? foil.slot() : -1;
         }
-        if (chronomatronRevealLatched && chronomatronClickIndex < chronomatron.size()) {
-            return OptionalInt.of(chronomatron.get(chronomatronClickIndex++));
+
+        if (chronomatronClickIndex < chronomatron.size()) {
+            return OptionalInt.of(chronomatron.get(chronomatronClickIndex));
         }
         return OptionalInt.empty();
     }
@@ -84,14 +136,14 @@ final class ExperimentSolver {
     private OptionalInt solveUltrasequencer(List<Cell> cells) {
         Cell control = cell(cells, 49);
         if (control == null) return OptionalInt.empty();
-        if (control.itemId().equals("minecraft:clock")) {
+        if (control.itemId().contains("clock")) {
             ultrasequencerReady = false;
             if (ultrasequencer.containsKey(ultrasequencerClickIndex)) {
-                return OptionalInt.of(ultrasequencer.get(ultrasequencerClickIndex++));
+                return OptionalInt.of(ultrasequencer.get(ultrasequencerClickIndex));
             }
             return OptionalInt.empty();
         }
-        if (control.itemId().equals("minecraft:glowstone") && !ultrasequencerReady) {
+        if (!ultrasequencerReady) {
             ultrasequencer.clear();
             cells.stream()
                 .filter(cell -> cell.slot() >= 9 && cell.slot() <= 44)
@@ -99,7 +151,9 @@ final class ExperimentSolver {
                 .sorted(Comparator.comparingInt(Cell::count))
                 .forEach(cell -> ultrasequencer.put(cell.count() - 1, cell.slot()));
             ultrasequencerClickIndex = 0;
-            ultrasequencerReady = true;
+            if (!ultrasequencer.isEmpty()) {
+                ultrasequencerReady = true;
+            }
         }
         return OptionalInt.empty();
     }
@@ -117,14 +171,16 @@ final class ExperimentSolver {
                 seenPairs.remove(key);
             }
         }
-        Integer next = pairClicks.poll();
+        Integer next = pairClicks.peek();
         return next == null ? OptionalInt.empty() : OptionalInt.of(next);
     }
 
     private void reset(Mode selected) {
         mode = selected;
         chronomatron.clear();
-        chronomatronRevealLatched = false;
+        chronomatronPreviewSequence.clear();
+        lastFoilSlot = -1;
+        wasClock = false;
         chronomatronClickIndex = 0;
         ultrasequencer.clear();
         ultrasequencerClickIndex = 0;

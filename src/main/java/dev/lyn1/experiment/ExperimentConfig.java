@@ -13,6 +13,9 @@ import net.fabricmc.loader.api.FabricLoader;
 
 /** Enabled and feature settings for the Auto Experiment feature. */
 public final class ExperimentConfig {
+    public static final int MIN_BASE_PING_MS = 0;
+    public static final int MAX_BASE_PING_MS = 1_000;
+    private static final int DEFAULT_BASE_PING_MS = 0;
     private static final boolean DEFAULT_ENABLED = true;
     private static final boolean DEFAULT_SUPERPAIRS = true;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -20,11 +23,12 @@ public final class ExperimentConfig {
 
     private static boolean enabled = DEFAULT_ENABLED;
     private static boolean superpairs = DEFAULT_SUPERPAIRS;
+    private static int basePingMs = DEFAULT_BASE_PING_MS;
 
     private ExperimentConfig() {
     }
 
-    private record Data(Boolean enabled, Boolean superpairs) {
+    private record Data(Boolean enabled, Boolean superpairs, Integer basePing) {
     }
 
     public static void load() {
@@ -34,6 +38,7 @@ public final class ExperimentConfig {
             if (data == null) return;
             if (data.enabled != null) enabled = data.enabled;
             if (data.superpairs != null) superpairs = data.superpairs;
+            if (data.basePing != null) basePingMs = clampBasePing(data.basePing);
         } catch (IOException | JsonParseException e) {
             // Corrupt config: fall back to defaults.
         }
@@ -42,7 +47,7 @@ public final class ExperimentConfig {
     private static void save() {
         try {
             Path tmp = CONFIG_PATH.resolveSibling(CONFIG_PATH.getFileName() + ".tmp");
-            Files.writeString(tmp, GSON.toJson(new Data(enabled, superpairs)), StandardCharsets.UTF_8);
+            Files.writeString(tmp, GSON.toJson(new Data(enabled, superpairs, basePingMs)), StandardCharsets.UTF_8);
             try {
                 Files.move(tmp, CONFIG_PATH, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             } catch (AtomicMoveNotSupportedException e) {
@@ -69,5 +74,18 @@ public final class ExperimentConfig {
     public static void setSuperpairs(boolean value) {
         superpairs = value;
         save();
+    }
+
+    public static int basePingMs() {
+        return basePingMs;
+    }
+
+    public static void setBasePingMs(int ms) {
+        basePingMs = clampBasePing(ms);
+        save();
+    }
+
+    private static int clampBasePing(int ms) {
+        return Math.max(MIN_BASE_PING_MS, Math.min(MAX_BASE_PING_MS, ms));
     }
 }

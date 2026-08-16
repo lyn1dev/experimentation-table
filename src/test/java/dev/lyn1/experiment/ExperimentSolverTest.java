@@ -19,6 +19,7 @@ class ExperimentSolverTest {
     void selectsTheRightGameModeFromTheTitle() {
         ExperimentSolver solver = new ExperimentSolver();
         assertEquals(ExperimentSolver.Mode.CHRONOMATRON, solver.select("Chronomatron (Best of 5)"));
+        assertEquals(ExperimentSolver.Mode.CHRONOMATRON, solver.select("Chronomatron (Metaphysical)"));
         assertEquals(ExperimentSolver.Mode.ULTRASEQUENCER, solver.select("Ultrasequencer (Best of 3)"));
         assertEquals(ExperimentSolver.Mode.SUPERPAIRS, solver.select("Superpairs (1/5)"));
         assertEquals(ExperimentSolver.Mode.NONE, solver.select(""));
@@ -30,27 +31,61 @@ class ExperimentSolverTest {
     @Test
     void chronomatronRecordsFoilNotesAndReplaysThemInOrder() {
         ExperimentSolver solver = new ExperimentSolver();
-        solver.select("Chronomatron (Best of 5)");
+        solver.select("Chronomatron (Metaphysical)");
 
-        // Preparation: glowstone control, nothing to click.
-        List<ExperimentSolver.Cell> prep = List.of(control("minecraft:glowstone"), cell(20, "minecraft:red_dye", 1, true, ""));
-        assertTrue(solver.nextClick(prep).isEmpty());
+        // Round 1 Preview: Glowstone phase -> slot 20 flashes
+        List<ExperimentSolver.Cell> r1Flash = List.of(control("minecraft:glowstone"), cell(20, "minecraft:red_dye", 1, true, ""));
+        assertTrue(solver.nextClick(r1Flash).isEmpty());
 
-        // Round 1: clock control reveals a foil note at slot 20 -> record and replay it.
-        List<ExperimentSolver.Cell> round1 = List.of(control("minecraft:clock"), cell(20, "minecraft:red_dye", 1, true, ""));
-        assertEquals(20, solver.nextClick(round1).orElseThrow());
-        // Replay done; nothing else to click this round.
-        assertTrue(solver.nextClick(round1).isEmpty());
+        // Round 1 Input: Clock appears -> clicks [20]
+        List<ExperimentSolver.Cell> r1Input = List.of(control("minecraft:clock"), cell(20, "minecraft:red_dye", 1, false, ""));
+        assertEquals(20, solver.nextClick(r1Input).orElseThrow());
+        solver.onSlotClicked(20);
+        assertTrue(solver.nextClick(r1Input).isEmpty());
 
-        // Round 2: glowstone latches off, a new foil note at slot 25 -> replay 20, then 25.
-        assertTrue(solver.nextClick(prep).isEmpty());
-        List<ExperimentSolver.Cell> round2 = List.of(
-            control("minecraft:clock"),
-            cell(20, "minecraft:red_dye", 1, false, ""),
-            cell(25, "minecraft:red_dye", 1, true, "")
-        );
-        assertEquals(20, solver.nextClick(round2).orElseThrow());
-        assertEquals(25, solver.nextClick(round2).orElseThrow());
+        // Round 2 Preview: Glowstone phase -> gap, flashes 20, gap, then flashes 31
+        List<ExperimentSolver.Cell> r2Gap = List.of(control("minecraft:glowstone"), cell(20, "minecraft:red_dye", 1, false, ""), cell(31, "minecraft:blue_dye", 1, false, ""));
+        assertTrue(solver.nextClick(r2Gap).isEmpty());
+
+        List<ExperimentSolver.Cell> r2Flash1 = List.of(control("minecraft:glowstone"), cell(20, "minecraft:red_dye", 1, true, ""), cell(31, "minecraft:blue_dye", 1, false, ""));
+        assertTrue(solver.nextClick(r2Flash1).isEmpty());
+
+        assertTrue(solver.nextClick(r2Gap).isEmpty());
+
+        List<ExperimentSolver.Cell> r2Flash2 = List.of(control("minecraft:glowstone"), cell(20, "minecraft:red_dye", 1, false, ""), cell(31, "minecraft:blue_dye", 1, true, ""));
+        assertTrue(solver.nextClick(r2Flash2).isEmpty());
+
+        // Round 2 Input: Clock appears -> replays [20, 31]
+        List<ExperimentSolver.Cell> r2Input = List.of(control("minecraft:clock"), cell(20, "minecraft:red_dye", 1, false, ""), cell(31, "minecraft:blue_dye", 1, false, ""));
+        assertEquals(20, solver.nextClick(r2Input).orElseThrow());
+        solver.onSlotClicked(20);
+        assertEquals(31, solver.nextClick(r2Input).orElseThrow());
+        solver.onSlotClicked(31);
+        assertTrue(solver.nextClick(r2Input).isEmpty());
+
+        // Round 3 Preview: Glowstone phase -> gap, flashes 20, gap, 31, gap, 14
+        assertTrue(solver.nextClick(r2Gap).isEmpty());
+
+        List<ExperimentSolver.Cell> r3Flash1 = List.of(control("minecraft:glowstone"), cell(20, "minecraft:red_dye", 1, true, ""));
+        assertTrue(solver.nextClick(r3Flash1).isEmpty());
+        assertTrue(solver.nextClick(r2Gap).isEmpty());
+
+        List<ExperimentSolver.Cell> r3Flash2 = List.of(control("minecraft:glowstone"), cell(31, "minecraft:blue_dye", 1, true, ""));
+        assertTrue(solver.nextClick(r3Flash2).isEmpty());
+        assertTrue(solver.nextClick(r2Gap).isEmpty());
+
+        List<ExperimentSolver.Cell> r3Flash3 = List.of(control("minecraft:glowstone"), cell(14, "minecraft:lime_dye", 1, true, ""));
+        assertTrue(solver.nextClick(r3Flash3).isEmpty());
+
+        // Round 3 Input: Clock appears -> replays [20, 31, 14]
+        List<ExperimentSolver.Cell> r3Input = List.of(control("minecraft:clock"));
+        assertEquals(20, solver.nextClick(r3Input).orElseThrow());
+        solver.onSlotClicked(20);
+        assertEquals(31, solver.nextClick(r3Input).orElseThrow());
+        solver.onSlotClicked(31);
+        assertEquals(14, solver.nextClick(r3Input).orElseThrow());
+        solver.onSlotClicked(14);
+        assertTrue(solver.nextClick(r3Input).isEmpty());
     }
 
     @Test
@@ -71,9 +106,13 @@ class ExperimentSolverTest {
         // Replay: clock control clicks 12, then 30, then 40, then 22.
         List<ExperimentSolver.Cell> replay = List.of(control("minecraft:clock"));
         assertEquals(12, solver.nextClick(replay).orElseThrow());
+        solver.onSlotClicked(12);
         assertEquals(30, solver.nextClick(replay).orElseThrow());
+        solver.onSlotClicked(30);
         assertEquals(40, solver.nextClick(replay).orElseThrow());
+        solver.onSlotClicked(40);
         assertEquals(22, solver.nextClick(replay).orElseThrow());
+        solver.onSlotClicked(22);
         assertTrue(solver.nextClick(replay).isEmpty());
     }
 
@@ -89,9 +128,13 @@ class ExperimentSolverTest {
             cell(44, "minecraft:orange_dye", 1, false, "Orange Dye")
         );
         assertEquals(11, solver.nextClick(cells).orElseThrow());
+        solver.onSlotClicked(11);
         assertEquals(22, solver.nextClick(cells).orElseThrow());
+        solver.onSlotClicked(22);
         assertEquals(33, solver.nextClick(cells).orElseThrow());
+        solver.onSlotClicked(33);
         assertEquals(44, solver.nextClick(cells).orElseThrow());
+        solver.onSlotClicked(44);
         assertTrue(solver.nextClick(cells).isEmpty());
     }
 

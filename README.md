@@ -30,14 +30,16 @@ in-game via `/experiment` commands.
 
 | Command | Effect |
 |---|---|
-| `/experiment` | Show current status and settings |
+| `/experiment` | Show current status, superpairs setting, baseline ping, and current ping |
 | `/experiment on` / `off` | Enable / disable the solver |
 | `/experiment superpairs on` / `off` | Enable / disable Superpairs auto-matching |
+| `/experiment ping` | Check current detected server ping and baseline delay |
+| `/experiment ping <ms>` | Set baseline ping delay buffer (`0`–`1000` ms, default `0`) |
 
 Confirmation example (green in chat):
 
 ```
-[Lyn1-Experiment] Auto Experiment enabled        (in-game, shown in green)
+[Lyn1-Experiment] Baseline ping delay set to 150 ms        (in-game, shown in green)
 ```
 
 ## Configuration
@@ -46,15 +48,17 @@ Settings are saved to `config/lyn1-experiment.json`:
 
 ```json
 {
+  "basePing": 0,
   "enabled": true,
   "superpairs": true
 }
 ```
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `enabled` | boolean | true | Solver on/off |
-| `superpairs` | boolean | true | Superpairs auto-matching on/off |
+| Field | Type | Range | Default | Description |
+|---|---|---|---|---|
+| `basePing` | integer | 0–1000 | 0 | Minimum baseline ping buffer in milliseconds |
+| `enabled` | boolean | — | true | Solver on/off |
+| `superpairs` | boolean | — | true | Superpairs auto-matching on/off |
 
 ## Usage
 
@@ -85,9 +89,9 @@ The built jar is at `build/libs/lyn1-experiment-0.1.0.jar`.
    `… Stats` titles are ignored.
 2. A snapshot of all container slots (item id, count, foil, name) feeds the solver.
 3. The solver decides the next click:
-   - **Chronomatron**: slot 49 control; `glowstone` = preparation (latch reset),
-     `clock` = reveal: a foil note within slots 10–43 is appended to the memory,
-     then the whole memorized sequence is clicked back in order.
+   - **Chronomatron**: slot 49 control; during the demonstration phase (non-clock,
+     e.g. `glowstone`), notes light up with foil/glint and are recorded into sequence
+     memory; when the control switches to `clock`, the full sequence is clicked back in order.
    - **Ultrasequencer**: slot 49 control; `glowstone` = reveal: notes in slots
      9–44 are sorted by their count label (count − 1 = replay index); `clock` =
      replay: click the mapped slots in order.
@@ -107,6 +111,7 @@ The mod features a behavioral simulation engine to avoid metronome-like inputs:
 - **Contextual Hesitation**:
   - **Superpairs**: Introduces a $160\text{–}290\text{ ms}$ visual search pause when locating a new matching pair, followed by rapid pair confirmation.
   - **Sequence Recall**: Adds a 10% chance of a micro-hesitation ($45\text{–}95\text{ ms}$) during extended sequence playback.
+- **Network Ping Compensation**: Automatically samples real-time server latency from packet headers (`PlayerInfo.getLatency()`) and adds `max(configuredBaseline, detectedPing)` to click intervals, guaranteeing the server has acknowledged and rendered prior slot updates before issuing subsequent clicks on high-ping or laggy connections.
 - **Screen Open Orientation**: Pauses $300\text{–}500\text{ ms}$ upon opening any table GUI before initiating inputs.
 
 ## Project structure
