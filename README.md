@@ -24,7 +24,7 @@ in-game via `/experiment` commands.
 - **No GUI** — the feature is toggled and configured entirely through
   `/experiment` commands; settings persist to `config/lyn1-experiment.json`.
 - Game identification is purely client-side: the open screen title selects the
-  solver, and clicks use standard **PICKUP (Left/Right Click)** container interactions.
+  solver, and clicks use standard **PICKUP (Left Click)** container interactions.
 
 ## Commands
 
@@ -100,7 +100,7 @@ The built jar is at `build/libs/lyn1-experiment-0.1.0.jar`.
 
 The mod features a behavioral simulation engine to avoid metronome-like inputs:
 
-- **Packet Randomization**: Clicks use standard `ContainerInput.PICKUP` packets with a randomized distribution of **96% Left Click** (`button = 0`) and **4% Right Click** (`button = 1`).
+- **Standard Input Packets**: Clicks use standard `ContainerInput.PICKUP` Left Click packets (`button = 0`), matching normal human player interactions.
 - **Glowstone $\rightarrow$ Clock Reaction Delay**: When the game transitions from the reveal phase (`glowstone`) to the input phase (`clock`), the mod simulates human perception time using a Gaussian curve ($\mu = 330\text{ ms}, \sigma = 40\text{ ms}$, clamped to $[250, 480]\text{ ms}$).
 - **Spatial Distance Scaling (Fitts's Law)**: Calculates the 2D Euclidean distance between successive slots on the $9 \times 6$ inventory grid, adding $16\text{–}24\text{ ms}$ per grid unit so distant slots take naturally longer to reach than adjacent ones.
 - **Gaussian Jitter**: Every click interval incorporates standard normal variance ($\mathcal{N}(0, 25^2)\text{ ms}$, clamped to $[-45, +65]\text{ ms}$) on top of the configured base delay.

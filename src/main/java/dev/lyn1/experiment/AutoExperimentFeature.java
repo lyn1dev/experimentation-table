@@ -169,9 +169,7 @@ public final class AutoExperimentFeature {
         if (client.player == null || client.gameMode == null) {
             return false;
         }
-        // 96% Left Click (0), 4% Right Click (1)
-        int button = ThreadLocalRandom.current().nextInt(100) < 4 ? 1 : 0;
-        client.gameMode.handleContainerInput(containerId, slot, button, ContainerInput.PICKUP, client.player);
+        client.gameMode.handleContainerInput(containerId, slot, 0, ContainerInput.PICKUP, client.player);
         return true;
     }
 
